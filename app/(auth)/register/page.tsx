@@ -40,8 +40,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-      <h1 className="text-center text-3xl font-bold mb-6">
+   <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+      <h1 className="text-center text-2xl sm:text-3xl font-bold mb-6">
         <span className="text-red-600">JOLO</span>
         <span className="text-black">RIDE</span>
       </h1>

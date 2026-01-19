@@ -43,8 +43,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-      <h1 className="text-center text-3xl font-bold mb-6">
+    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+      <h1 className="text-center text-2xl sm:text-3xl font-bold mb-6">
         <span className="text-red-600">JOLO</span>
         <span className="text-black">RIDE</span>
       </h1>
@@ -53,9 +53,13 @@ export default function LoginPage() {
         <input name="email" type="email" placeholder="Email" className="input" />
         <input name="password" type="password" placeholder="Password" className="input" />
 
-        <button disabled={loading} className="w-full bg-black text-white py-2 rounded-lg">
-          {loading ? "Logging in..." : "Login"}
-        </button>
+       <button
+  type="submit"
+  className="w-full bg-black text-white py-3 rounded-xl text-base font-medium active:scale-95 transition"
+>
+  Login
+</button>
+
       </form>
 
       <p className="text-center text-sm mt-6">

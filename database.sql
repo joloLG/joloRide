@@ -239,3 +239,30 @@ LIMIT 1;
 UPDATE riders
 SET last_assigned = now(), status = 'DELIVERING'
 WHERE id = :rider_id;
+
+-- Hero Settings
+CREATE TABLE hero_settings (
+  id int PRIMARY KEY DEFAULT 1,
+  title text,
+  subtitle text,
+  background_image text,
+  background_color text DEFAULT '#f97316'
+);
+
+INSERT INTO hero_settings (id, title, subtitle)
+VALUES (1, 'Welcome to JoloRide', 'Fast & Reliable Delivery');
+
+ALTER TABLE hero_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read hero"
+ON hero_settings FOR SELECT
+USING (true);
+
+CREATE POLICY "Admin update hero"
+ON hero_settings FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  )
+);
