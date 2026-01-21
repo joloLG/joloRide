@@ -39,7 +39,7 @@ export default function CheckoutPage() {
     const { data } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", id)
+      .or(`id.eq.${id},user_id.eq.${id}`)
       .single();
 
     setProfile(data);
@@ -102,44 +102,140 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <h1 className="font-bold text-lg">Checkout</h1>
-
-      <LocationPicker setLocation={setLocation} />
-
-      {/* PAYMENT */}
-      <div className="space-y-2">
-        <label className="flex gap-2 items-center">
-          <input
-            type="radio"
-            checked={payment === "COD"}
-            onChange={() => setPayment("COD")}
-          />
-          Cash on Delivery
-        </label>
-
-        <label className="flex gap-2 items-center">
-          <input
-            type="radio"
-            checked={payment === "QRPH"}
-            onChange={() => setPayment("QRPH")}
-          />
-          QRPH Online Payment
-        </label>
+    <div className="max-w-2xl mx-auto p-4 pb-32 sm:pb-12">
+      <div className="flex items-center gap-3 mb-8 px-1">
+        <div className="bg-orange-100 p-2 rounded-xl">
+          <span className="text-xl">💳</span>
+        </div>
+        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Checkout</h1>
       </div>
 
-      {payment === "QRPH" && (
-        <div className="bg-gray-100 p-3 rounded-xl text-sm">
-          QRPH code will be generated after order confirmation.
-        </div>
-      )}
+      <div className="space-y-6">
+        {/* DELIVERY SECTION */}
+        <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <span>📍</span> Delivery Location
+          </h2>
+          <LocationPicker setLocation={setLocation} />
+          {location && (
+            <div className="mt-4 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+              <p className="text-sm font-bold text-gray-900">{location.address}</p>
+              <p className="text-[10px] text-gray-400 font-medium uppercase mt-1">Pinned automatically via GPS</p>
+            </div>
+          )}
+        </section>
 
-      <button
-        onClick={placeOrder}
-        className="w-full bg-black text-white py-3 rounded-xl"
-      >
-        Confirm Order
-      </button>
+        {/* PAYMENT SECTION */}
+        <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <span>💰</span> Payment Method
+          </h2>
+          <div className="grid grid-cols-1 gap-3">
+            <button
+              onClick={() => setPayment("COD")}
+              className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
+                payment === "COD"
+                  ? "border-orange-500 bg-orange-50/50"
+                  : "border-gray-100 bg-white hover:border-orange-200"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl ${payment === "COD" ? "bg-orange-100" : "bg-gray-100"}`}>
+                  💵
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-sm text-gray-900">Cash on Delivery</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Pay when you receive</p>
+                </div>
+              </div>
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                payment === "COD" ? "border-orange-500 bg-orange-500" : "border-gray-200"
+              }`}>
+                {payment === "COD" && <div className="w-2 h-2 bg-white rounded-full" />}
+              </div>
+            </button>
+
+            <button
+              onClick={() => setPayment("QRPH")}
+              className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
+                payment === "QRPH"
+                  ? "border-orange-500 bg-orange-50/50"
+                  : "border-gray-100 bg-white hover:border-orange-200"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl ${payment === "QRPH" ? "bg-orange-100" : "bg-gray-100"}`}>
+                  📲
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-sm text-gray-900">QRPH Payment</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Scan any banking app</p>
+                </div>
+              </div>
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                payment === "QRPH" ? "border-orange-500 bg-orange-500" : "border-gray-200"
+              }`}>
+                {payment === "QRPH" && <div className="w-2 h-2 bg-white rounded-full" />}
+              </div>
+            </button>
+          </div>
+
+          {payment === "QRPH" && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-2xl border border-blue-100 flex gap-3 items-start">
+              <span className="text-lg">ℹ️</span>
+              <p className="text-xs text-blue-700 font-medium leading-relaxed">
+                A QRPH code will be generated instantly after you confirm the order. You can pay using GCash, Maya, or any bank app.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* ORDER SUMMARY */}
+        <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <span>📦</span> Order Summary
+          </h2>
+          <div className="space-y-3 mb-4">
+            {items.map((item) => (
+              <div key={item.id} className="flex justify-between items-center text-sm">
+                <span className="text-gray-600 font-medium">
+                  {item.quantity}x {item.name}
+                </span>
+                <span className="font-bold text-gray-900">₱{(item.price * item.quantity).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-dashed border-gray-200 pt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="font-bold text-gray-700">₱{items.reduce((sum, i) => sum + i.price * i.quantity, 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Delivery Fee</span>
+              <span className="font-bold text-gray-700 text-green-600">FREE</span>
+            </div>
+            <div className="flex justify-between items-end pt-2">
+              <span className="text-sm font-bold text-gray-900 uppercase">Total Amount</span>
+              <span className="text-2xl font-black text-orange-600 tracking-tighter">
+                ₱{items.reduce((sum, i) => sum + i.price * i.quantity, 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* CONFIRM BAR */}
+      <div className="fixed bottom-16 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-gray-100 p-4 pb-6 z-40">
+        <div className="max-w-7xl mx-auto">
+          <button
+            onClick={placeOrder}
+            className="w-full bg-orange-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-100 transition-all hover:bg-orange-700 active:scale-95 flex items-center justify-center gap-3"
+          >
+            <span>Confirm & Place Order</span>
+            <span className="text-xl">🚀</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

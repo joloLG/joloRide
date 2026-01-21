@@ -45,6 +45,7 @@ export default function UserHome() {
         { data: heroData },
         { data: storeData },
         { data: productData },
+        { data: orderData },
       ] = await Promise.all([
         supabase.from("hero_settings").select("*").single(),
         supabase
@@ -55,13 +56,59 @@ export default function UserHome() {
         supabase
           .from("products")
           .select("*")
+          .eq("is_available", true)
           .order("created_at", { ascending: false })
-          .limit(10),
+          .limit(20),
+        // Get user's order history for recommendations
+        supabase
+          .from("orders")
+          .select(`
+            order_items(
+              product_id
+            )
+          `)
+          .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
+          .order("created_at", { ascending: false })
+          .limit(5)
       ]);
 
       setHero(heroData);
       setStores(storeData || []);
-      setProducts(productData || []);
+
+      // Implement recommendation algorithm
+      let recommendedProducts = productData || [];
+      
+      if (orderData && orderData.length > 0) {
+        // Get product IDs from user's order history
+        const orderedProductIds = orderData
+          .flatMap(order => order.order_items)
+          .map(item => item.product_id);
+
+        if (orderedProductIds.length > 0) {
+          // Get products from same stores as previously ordered items
+          const { data: storeProducts } = await supabase
+            .from("products")
+            .select("*")
+            .in("store_id", 
+              (await supabase
+                .from("products")
+                .select("store_id")
+                .in("id", orderedProductIds)
+              ).data?.map(p => p.store_id) || []
+            )
+            .eq("is_available", true)
+            .not("id", "in", `(${orderedProductIds.join(',')})`)
+            .order("created_at", { ascending: false })
+            .limit(10);
+
+          if (storeProducts && storeProducts.length > 0) {
+            recommendedProducts = storeProducts;
+          }
+        }
+      }
+
+      // If no recommendations, use popular products (most recent)
+      setProducts(recommendedProducts.slice(0, 10));
     } catch (err) {
       console.error('Error fetching home data:', err);
       setError('Failed to load data. Please try again.');
@@ -97,33 +144,50 @@ export default function UserHome() {
   }
 
   return (
-    <div className="space-y-6 pb-4">
+    <div className="space-y-8 pb-20 sm:pb-8">
       {/* HERO */}
       {hero && (
-        <div
-          className="h-44 rounded-b-3xl flex flex-col justify-center px-6 text-white"
-          style={{
-            backgroundColor: hero.background_color,
-            backgroundImage: hero.background_image ? `url(${hero.background_image})` : 'none',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        >
-          {hero.title && <h1 className="text-2xl font-bold">{hero.title}</h1>}
-          {hero.subtitle && <p className="text-sm opacity-90">{hero.subtitle}</p>}
+        <div className="px-4 pt-2">
+          <div
+            className="h-48 sm:h-64 rounded-[2rem] flex flex-col justify-center px-8 text-white relative overflow-hidden shadow-lg shadow-orange-100"
+            style={{
+              backgroundColor: hero.background_color,
+              backgroundImage: hero.background_image ? `url(${hero.background_image})` : 'none',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            {/* Overlay for better text readability if there's a background image */}
+            {hero.background_image && <div className="absolute inset-0 bg-black/20" />}
+            
+            <div className="relative z-10">
+              {hero.title && <h1 className="text-3xl sm:text-4xl font-extrabold mb-2 drop-shadow-md">{hero.title}</h1>}
+              {hero.subtitle && <p className="text-base sm:text-lg opacity-95 max-w-[240px] leading-tight drop-shadow-sm">{hero.subtitle}</p>}
+              
+              <button className="mt-6 px-6 py-2 bg-white text-gray-900 rounded-full text-sm font-bold shadow-sm hover:bg-orange-50 transition-colors w-fit">
+                Order Now
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* STORES */}
       <section className="px-4">
-        <h2 className="font-semibold mb-2">Featured Stores</h2>
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h2 className="text-xl font-bold text-gray-900">Featured Stores</h2>
+          <button className="text-sm font-bold text-orange-600 hover:text-orange-700">View All</button>
+        </div>
         <StoresCarousel stores={stores} />
       </section>
 
       {/* PRODUCTS */}
       <section className="px-4">
-        <h2 className="font-semibold mb-2">Recommended For You</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h2 className="text-xl font-bold text-gray-900">Recommended For You</h2>
+          <button className="text-sm font-bold text-orange-600 hover:text-orange-700">See More</button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
