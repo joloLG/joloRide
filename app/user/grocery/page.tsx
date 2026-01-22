@@ -23,6 +23,8 @@ interface Product {
   image_url: string;
   store_id: string;
   store_name?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function GroceryPage() {
@@ -31,6 +33,7 @@ export default function GroceryPage() {
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sort, setSort] = useState<"name" | "price_low" | "price_high">("name");
 
   const fetchGroceryStores = useCallback(async () => {
     try {
@@ -116,7 +119,8 @@ export default function GroceryPage() {
       <div className="pb-16">
         <StoreHeader
           store={selectedStore}
-          onBack={() => setSelectedStore(null)}
+          sort={sort}
+          setSort={setSort}
         />
         <ProductList products={products.filter(p => p.store_id === selectedStore.id)} storeId={selectedStore.id} />
       </div>
@@ -139,14 +143,8 @@ export default function GroceryPage() {
       {/* FEATURED GROCERY STORES */}
       {stores.length > 0 && (
         <section className="px-4">
-          <div className="flex items-center justify-between mb-4 px-1">
-            <h2 className="text-xl font-bold text-gray-900">Top Stores</h2>
-            <button className="text-sm font-bold text-orange-600 hover:text-orange-700">See All</button>
-          </div>
-          <StoresCarousel 
-            stores={stores} 
-            onStoreSelect={(store) => setSelectedStore(store)}
-          />
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Featured Stores</h2>
+          <StoresCarousel stores={stores} />
         </section>
       )}
 

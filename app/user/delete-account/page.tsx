@@ -45,7 +45,7 @@ export default function DeleteAccountPage() {
       if (authError) {
         // If admin deletion fails, try regular sign out
         await supabase.auth.signOut();
-        toast.warning("Account deletion initiated. Please contact support for complete removal.");
+        toast.error("Account deletion initiated. Please contact support for complete removal.");
       } else {
         toast.success("Account deleted successfully");
       }

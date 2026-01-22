@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Edit2, Trash2, ImageIcon, CheckCircle, XCircle, Store as StoreIcon, X } from "lucide-react";
+import { ImageUploader } from "@/lib/storage";
+import { Plus, Edit2, Trash2, ImageIcon, CheckCircle, XCircle, Store as StoreIcon, X, Upload } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 interface Store {
@@ -16,6 +17,7 @@ interface Product {
   name: string;
   price: number;
   image?: string;
+  image_url?: string;
   store_id: string;
   is_available: boolean;
   created_at: string;
@@ -31,9 +33,12 @@ export default function ProductManagement() {
     name: "",
     price: "",
     image: "",
+    image_url: "",
     store_id: "",
     is_available: true,
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -80,10 +85,32 @@ export default function ProductManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setIsUploading(true);
+      let imageUrl = formData.image || formData.image_url;
+
+      // Upload new image if selected
+      if (imageFile) {
+        const validation = ImageUploader.validateImageFile(imageFile);
+        if (!validation.valid) {
+          toast.error(validation.error);
+          setIsUploading(false);
+          return;
+        }
+
+        const uploadResult = await ImageUploader.uploadImage(imageFile, 'products');
+        if (uploadResult.error) {
+          toast.error(uploadResult.error);
+          setIsUploading(false);
+          return;
+        }
+        imageUrl = uploadResult.url;
+      }
+
       const productData = {
         name: formData.name,
         price: parseFloat(formData.price),
-        image: formData.image || null,
+        image: imageUrl,
+        image_url: imageUrl,
         store_id: formData.store_id,
         is_available: formData.is_available,
       };
@@ -108,12 +135,16 @@ export default function ProductManagement() {
         name: "",
         price: "",
         image: "",
+        image_url: "",
         store_id: "",
         is_available: true,
       });
+      setImageFile(null);
     } catch (error) {
       console.error("Error saving product:", error);
       toast.error("Failed to save product");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -122,10 +153,12 @@ export default function ProductManagement() {
     setFormData({
       name: product.name,
       price: product.price.toString(),
-      image: product.image || "",
+      image: product.image || product.image_url || "",
+      image_url: product.image_url || product.image || "",
       store_id: product.store_id,
       is_available: product.is_available,
     });
+    setImageFile(null);
     setIsModalOpen(true);
   };
 
@@ -180,9 +213,11 @@ export default function ProductManagement() {
               name: "",
               price: "",
               image: "",
+              image_url: "",
               store_id: "",
               is_available: true,
             });
+            setImageFile(null);
             setIsModalOpen(true);
           }}
           className="w-full sm:w-auto px-6 py-3 bg-orange-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all active:scale-95 flex items-center justify-center gap-2"
@@ -384,17 +419,64 @@ export default function ProductManagement() {
                 
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">
-                    Image URL
+                    Product Image
                   </label>
-                  <div className="relative">
-                    <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    <input
-                      type="url"
-                      value={formData.image}
-                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                      placeholder="https://images.unsplash.com/..."
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold placeholder:text-gray-400 focus:ring-2 focus:ring-orange-500 transition-all"
-                    />
+                  <div className="space-y-3">
+                    {/* File Upload */}
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const validation = ImageUploader.validateImageFile(file);
+                            if (validation.valid) {
+                              setImageFile(file);
+                            } else {
+                              toast.error(validation.error);
+                            }
+                          }
+                        }}
+                        className="hidden"
+                        id="product-image-upload"
+                      />
+                      <label
+                        htmlFor="product-image-upload"
+                        className="flex items-center gap-3 w-full p-4 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-all"
+                      >
+                        <Upload size={20} className="text-gray-400" />
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-gray-700">
+                            {imageFile ? imageFile.name : "Choose image file"}
+                          </p>
+                          <p className="text-xs text-gray-400">JPEG, PNG, GIF, WebP up to 5MB</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Preview */}
+                    {(imageFile || formData.image) && (
+                      <div className="relative w-full h-32 bg-gray-100 rounded-xl overflow-hidden">
+                        <img
+                          src={imageFile ? URL.createObjectURL(imageFile) : formData.image}
+                          alt="Product preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                    {/* Or URL fallback */}
+                    <div className="relative">
+                      <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                      <input
+                        type="url"
+                        value={formData.image}
+                        onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                        placeholder="Or enter image URL"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold placeholder:text-gray-400 focus:ring-2 focus:ring-orange-500 transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -409,9 +491,10 @@ export default function ProductManagement() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-2 px-6 py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all active:scale-95"
+                  disabled={isUploading}
+                  className="flex-2 px-6 py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {editingProduct ? "Update Item" : "Create Product"}
+                  {isUploading ? "Uploading..." : (editingProduct ? "Update Item" : "Create Product")}
                 </button>
               </div>
             </form>

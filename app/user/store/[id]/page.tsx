@@ -127,8 +127,6 @@ export default function StorePage() {
         store={store}
         sort={sort}
         setSort={setSort}
-        priceRange={priceRange}
-        setPriceRange={setPriceRange}
       />
       {isLoading ? (
         <div className="flex justify-center p-8">

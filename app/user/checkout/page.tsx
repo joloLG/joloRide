@@ -18,6 +18,7 @@ type Location = {
   lat: number;
   lng: number;
   address: string;
+  landmark?: string;
 };
 
 export default function CheckoutPage() {
@@ -66,18 +67,67 @@ export default function CheckoutPage() {
     }
 
     try {
-      const { error } = await supabase.from("orders").insert({
-        user_id: user.id,
-        items,
-        payment_method: payment,
-        dropoff_location: location,
-        status: "PENDING",
-      });
+      // Ensure user has a profile entry and get the profile ID
+      let profileId: string;
+      
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
 
-      if (error) throw error;
+      if (existingProfile) {
+        profileId = existingProfile.id;
+      } else {
+        // Create profile if it doesn't exist
+        const { data: newProfile, error: profileError } = await supabase.from("profiles").insert({
+          user_id: user.id,
+          email: user.email,
+          role: "user",
+          full_name: user.email?.split('@')[0] || "User",
+        }).select("id").single();
+        
+        if (profileError) {
+          console.error('Error creating user profile:', profileError);
+          throw profileError;
+        }
+        
+        profileId = newProfile.id;
+      }
+
+      // Calculate total amount
+      const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      
+      // Create order using the profile ID
+      const { data: order, error: orderError } = await supabase.from("orders").insert({
+        user_id: profileId, // Use profile ID, not auth user ID
+        status: "pending",
+        payment_method: payment,
+        total_amount: totalAmount,
+        delivery_fee: 0, // Free delivery for now
+        dropoff_address: location.address,
+        dropoff_lat: location.lat,
+        dropoff_lng: location.lng,
+        landmark: location.landmark || null,
+      }).select().single();
+
+      if (orderError) throw orderError;
+
+      // Create order items
+      const orderItems = items.map(item => ({
+        order_id: order.id,
+        product_id: item.id,
+        quantity: item.quantity,
+        price_at_time: item.price
+      }));
+
+      const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
+      if (itemsError) throw itemsError;
 
       clearCart();
       alert("Order placed successfully");
+      // You might want to redirect to order confirmation page
+      // window.location.href = '/user/orders';
     } catch (error) {
       console.error('Error placing order:', error);
       alert('Failed to place order. Please try again.');
@@ -120,6 +170,9 @@ export default function CheckoutPage() {
           {location && (
             <div className="mt-4 p-3 bg-gray-50 rounded-2xl border border-gray-100">
               <p className="text-sm font-bold text-gray-900">{location.address}</p>
+              {location.landmark && (
+                <p className="text-xs text-orange-600 font-medium mt-1">📍 {location.landmark}</p>
+              )}
               <p className="text-[10px] text-gray-400 font-medium uppercase mt-1">Pinned automatically via GPS</p>
             </div>
           )}

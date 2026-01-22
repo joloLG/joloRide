@@ -3,13 +3,15 @@
 import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Edit2, Trash2, Star, ImageIcon, X } from "lucide-react";
+import { ImageUploader } from "@/lib/storage";
+import { Plus, Edit2, Trash2, Star, ImageIcon, X, Upload } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 interface Store {
   id: string;
   name: string;
   image?: string;
+  cover_image?: string;
   is_featured: boolean;
   created_at: string;
 }
@@ -22,8 +24,11 @@ export default function StoreManagement() {
   const [formData, setFormData] = useState({
     name: "",
     image: "",
+    cover_image: "",
     is_featured: false,
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const fetchStores = useCallback(async () => {
     try {
@@ -50,17 +55,45 @@ export default function StoreManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setIsUploading(true);
+      let imageUrl = formData.image;
+
+      // Upload new image if selected
+      if (imageFile) {
+        const validation = ImageUploader.validateImageFile(imageFile);
+        if (!validation.valid) {
+          toast.error(validation.error);
+          setIsUploading(false);
+          return;
+        }
+
+        const uploadResult = await ImageUploader.uploadImage(imageFile, 'stores');
+        if (uploadResult.error) {
+          toast.error(uploadResult.error);
+          setIsUploading(false);
+          return;
+        }
+        imageUrl = uploadResult.url;
+      }
+
+      const storeData = {
+        name: formData.name,
+        image: imageUrl,
+        cover_image: imageUrl,
+        is_featured: formData.is_featured,
+      };
+
       if (editingStore) {
         // Update existing store
         const { error } = await supabase
           .from("stores")
-          .update(formData)
+          .update(storeData)
           .eq("id", editingStore.id);
         if (error) throw error;
         toast.success("Store updated successfully");
       } else {
         // Create new store
-        const { error } = await supabase.from("stores").insert(formData);
+        const { error } = await supabase.from("stores").insert(storeData);
         if (error) throw error;
         toast.success("Store created successfully");
       }
@@ -68,10 +101,13 @@ export default function StoreManagement() {
       await fetchStores();
       setIsModalOpen(false);
       setEditingStore(null);
-      setFormData({ name: "", image: "", is_featured: false });
+      setFormData({ name: "", image: "", cover_image: "", is_featured: false });
+      setImageFile(null);
     } catch (error) {
       console.error("Error saving store:", error);
       toast.error("Failed to save store");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -79,9 +115,11 @@ export default function StoreManagement() {
     setEditingStore(store);
     setFormData({
       name: store.name,
-      image: store.image || "",
+      image: store.image || store.cover_image || "",
+      cover_image: store.cover_image || store.image || "",
       is_featured: store.is_featured,
     });
+    setImageFile(null);
     setIsModalOpen(true);
   };
 
@@ -132,7 +170,8 @@ export default function StoreManagement() {
         <button
           onClick={() => {
             setEditingStore(null);
-            setFormData({ name: "", image: "", is_featured: false });
+            setFormData({ name: "", image: "", cover_image: "", is_featured: false });
+            setImageFile(null);
             setIsModalOpen(true);
           }}
           className="w-full sm:w-auto px-6 py-3 bg-orange-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all active:scale-95 flex items-center justify-center gap-2"
@@ -265,17 +304,64 @@ export default function StoreManagement() {
                 
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">
-                    Image URL
+                    Store Image
                   </label>
-                  <div className="relative">
-                    <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    <input
-                      type="url"
-                      value={formData.image}
-                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                      placeholder="https://images.unsplash.com/..."
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold placeholder:text-gray-400 focus:ring-2 focus:ring-orange-500 transition-all"
-                    />
+                  <div className="space-y-3">
+                    {/* File Upload */}
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const validation = ImageUploader.validateImageFile(file);
+                            if (validation.valid) {
+                              setImageFile(file);
+                            } else {
+                              toast.error(validation.error);
+                            }
+                          }
+                        }}
+                        className="hidden"
+                        id="store-image-upload"
+                      />
+                      <label
+                        htmlFor="store-image-upload"
+                        className="flex items-center gap-3 w-full p-4 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-all"
+                      >
+                        <Upload size={20} className="text-gray-400" />
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-gray-700">
+                            {imageFile ? imageFile.name : "Choose image file"}
+                          </p>
+                          <p className="text-xs text-gray-400">JPEG, PNG, GIF, WebP up to 5MB</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Preview */}
+                    {(imageFile || formData.image) && (
+                      <div className="relative w-full h-32 bg-gray-100 rounded-xl overflow-hidden">
+                        <img
+                          src={imageFile ? URL.createObjectURL(imageFile) : formData.image}
+                          alt="Store preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                    {/* Or URL fallback */}
+                    <div className="relative">
+                      <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                      <input
+                        type="url"
+                        value={formData.image}
+                        onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                        placeholder="Or enter image URL"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold placeholder:text-gray-400 focus:ring-2 focus:ring-orange-500 transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -310,9 +396,10 @@ export default function StoreManagement() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-2 px-6 py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all active:scale-95"
+                  disabled={isUploading}
+                  className="flex-2 px-6 py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {editingStore ? "Update Details" : "Create Store"}
+                  {isUploading ? "Uploading..." : (editingStore ? "Update Details" : "Create Store")}
                 </button>
               </div>
             </form>

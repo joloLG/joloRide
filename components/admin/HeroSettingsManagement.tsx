@@ -9,10 +9,12 @@ import {
   Save, 
   Eye, 
   Sparkles, 
-  Layout
+  Layout,
+  Upload
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { ImageUploader } from "@/lib/storage";
 import { toast } from "react-hot-toast";
 
 interface HeroSettings {
@@ -34,6 +36,8 @@ export default function HeroSettingsManagement() {
     title: "",
     subtitle: "",
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const fetchHeroSettings = useCallback(async () => {
     try {
@@ -71,9 +75,32 @@ export default function HeroSettingsManagement() {
     e.preventDefault();
     setIsSaving(true);
     try {
+      setIsUploading(true);
+      let imageUrl = formData.background_image;
+
+      // Upload new image if selected
+      if (imageFile) {
+        const validation = ImageUploader.validateImageFile(imageFile);
+        if (!validation.valid) {
+          toast.error(validation.error);
+          setIsUploading(false);
+          setIsSaving(false);
+          return;
+        }
+
+        const uploadResult = await ImageUploader.uploadImage(imageFile, 'hero');
+        if (uploadResult.error) {
+          toast.error(uploadResult.error);
+          setIsUploading(false);
+          setIsSaving(false);
+          return;
+        }
+        imageUrl = uploadResult.url;
+      }
+
       const settingsData = {
         background_color: formData.background_color,
-        background_image: formData.background_image || null,
+        background_image: imageUrl || null,
         title: formData.title || null,
         subtitle: formData.subtitle || null,
       };
@@ -94,11 +121,13 @@ export default function HeroSettingsManagement() {
       }
 
       await fetchHeroSettings();
+      setImageFile(null);
     } catch (error) {
       console.error("Error saving hero settings:", error);
       toast.error("Failed to save settings");
     } finally {
       setIsSaving(false);
+      setIsUploading(false);
     }
   };
 
@@ -206,17 +235,64 @@ export default function HeroSettingsManagement() {
 
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">
-                    Background Image URL
+                    Background Image
                   </label>
-                  <div className="relative">
-                    <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    <input
-                      type="url"
-                      value={formData.background_image}
-                      onChange={(e) => setFormData({ ...formData, background_image: e.target.value })}
-                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold placeholder:text-gray-400 focus:ring-2 focus:ring-orange-500 transition-all"
-                      placeholder="https://images.unsplash.com/..."
-                    />
+                  <div className="space-y-3">
+                    {/* File Upload */}
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const validation = ImageUploader.validateImageFile(file);
+                            if (validation.valid) {
+                              setImageFile(file);
+                            } else {
+                              toast.error(validation.error);
+                            }
+                          }
+                        }}
+                        className="hidden"
+                        id="hero-image-upload"
+                      />
+                      <label
+                        htmlFor="hero-image-upload"
+                        className="flex items-center gap-3 w-full p-4 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-all"
+                      >
+                        <Upload size={20} className="text-gray-400" />
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-gray-700">
+                            {imageFile ? imageFile.name : "Choose background image"}
+                          </p>
+                          <p className="text-xs text-gray-400">JPEG, PNG, GIF, WebP up to 5MB</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Preview */}
+                    {(imageFile || formData.background_image) && (
+                      <div className="relative w-full h-32 bg-gray-100 rounded-xl overflow-hidden">
+                        <img
+                          src={imageFile ? URL.createObjectURL(imageFile) : formData.background_image}
+                          alt="Background preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                    {/* Or URL fallback */}
+                    <div className="relative">
+                      <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                      <input
+                        type="url"
+                        value={formData.background_image}
+                        onChange={(e) => setFormData({ ...formData, background_image: e.target.value })}
+                        placeholder="Or enter image URL"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-2xl text-sm font-bold placeholder:text-gray-400 focus:ring-2 focus:ring-orange-500 transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -232,6 +308,7 @@ export default function HeroSettingsManagement() {
                     title: "",
                     subtitle: "",
                   });
+                  setImageFile(null);
                 }}
                 className="flex-1 px-6 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
               >
@@ -240,10 +317,10 @@ export default function HeroSettingsManagement() {
               </button>
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSaving || isUploading}
                 className="flex-2 px-6 py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {isSaving ? (
+                {isSaving || isUploading ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
                 ) : (
                   <Save size={16} strokeWidth={3} />
