@@ -5,11 +5,12 @@ import { supabase } from "@/lib/supabase";
 import { useUser } from "@/hooks/useUser";
 import { Package, Clock, CheckCircle, XCircle, Truck } from "lucide-react";
 import Link from "next/link";
+import OrderLivePreview from "@/components/OrderLivePreview";
 
 interface Order {
   id: string;
-  status: 'PENDING' | 'ASSIGNED' | 'DELIVERING' | 'COMPLETED' | 'CANCELLED';
-  total: number;
+  status: 'pending' | 'confirmed' | 'delivering' | 'completed' | 'cancelled';
+  total_amount: number; // Changed from total to total_amount to match database
   delivery_fee: number;
   payment_method: 'COD' | 'QRPH';
   created_at: string;
@@ -20,24 +21,20 @@ interface Order {
     id: string;
     quantity: number;
     price: number;
-    product: {
-      id: string;
-      name: string;
-      image_url: string;
-    };
   }>;
   rider?: {
+    id: string;
     full_name: string;
     mobile: string;
   };
 }
 
 const statusConfig = {
-  PENDING: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100', label: 'Pending' },
-  ASSIGNED: { icon: Package, color: 'text-blue-600', bg: 'bg-blue-100', label: 'Assigned' },
-  DELIVERING: { icon: Truck, color: 'text-purple-600', bg: 'bg-purple-100', label: 'On the way' },
-  COMPLETED: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100', label: 'Completed' },
-  CANCELLED: { icon: XCircle, color: 'text-red-600', bg: 'bg-red-100', label: 'Cancelled' },
+  pending: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-100', label: 'Pending' },
+  confirmed: { icon: Package, color: 'text-blue-600', bg: 'bg-blue-100', label: 'Assigned' },
+  delivering: { icon: Truck, color: 'text-purple-600', bg: 'bg-purple-100', label: 'On the way' },
+  completed: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100', label: 'Completed' },
+  cancelled: { icon: XCircle, color: 'text-red-600', bg: 'bg-red-100', label: 'Cancelled' },
 };
 
 export default function OrdersPage() {
@@ -48,7 +45,7 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
 
   const fetchOrders = useCallback(async () => {
-    if (!user) return;
+    if (!user || !profile) return;
 
     try {
       setIsLoading(true);
@@ -58,25 +55,20 @@ export default function OrdersPage() {
         .from("orders")
         .select(`
           *,
-          order_items(
-            *,
-            product:id(
-              name,
-              image_url
-            )
-          ),
-          rider:profiles(
+          order_items(*),
+          rider:profiles!orders_rider_id_fkey(
+            id,
             full_name,
             mobile
           )
         `)
-        .eq("user_id", user.id)
+        .eq("user_id", profile.id) // Use profile ID, not auth user ID
         .order("created_at", { ascending: false });
 
       if (filter === 'active') {
-        query = query.in("status", ['PENDING', 'ASSIGNED', 'DELIVERING']);
+        query = query.in("status", ['pending', 'confirmed', 'delivering']);
       } else if (filter === 'completed') {
-        query = query.in("status", ['COMPLETED', 'CANCELLED']);
+        query = query.in("status", ['completed', 'cancelled']);
       }
 
       const { data, error: fetchError } = await query;
@@ -89,7 +81,7 @@ export default function OrdersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, filter]);
+  }, [user, profile, filter]);
 
   useEffect(() => {
     fetchOrders();
@@ -181,6 +173,17 @@ export default function OrdersPage() {
                 className="block bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-200 transition-all group active:scale-[0.98]"
               >
                 <div className="p-5">
+                  {/* LIVE TRACKING PREVIEW FOR ACTIVE ORDERS */}
+                  {(order.status === 'delivering' && order.rider?.id) && (
+                    <OrderLivePreview
+                      orderId={order.id}
+                      riderId={order.rider.id}
+                      status={order.status}
+                      dropoffLat={order.drop_lat}
+                      dropoffLng={order.drop_lng}
+                    />
+                  )}
+
                   {/* ORDER HEADER */}
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
@@ -202,7 +205,7 @@ export default function OrdersPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-black text-gray-900 leading-none mb-1">₱{order.total.toLocaleString()}</p>
+                      <p className="text-lg font-black text-gray-900 leading-none mb-1">₱{order.total_amount.toLocaleString()}</p>
                       <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-100">
                         {order.payment_method}
                       </span>
@@ -211,34 +214,19 @@ export default function OrdersPage() {
 
                   {/* ORDER ITEMS MINI PREVIEW */}
                   <div className="flex items-center gap-2 mb-4 bg-gray-50/50 p-2 rounded-2xl border border-gray-100/50">
-                    <div className="flex -space-x-3 overflow-hidden">
-                      {order.order_items.slice(0, 3).map((item) => (
-                        <div key={item.id} className="relative inline-block w-10 h-10 rounded-xl border-2 border-white bg-gray-100 overflow-hidden shadow-sm">
-                          {item.product?.image_url ? (
-                            <img
-                              src={item.product.image_url}
-                              alt={item.product.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs">🍔</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex-1 min-w-0 ml-1">
-                      <p className="text-xs font-bold text-gray-700 truncate">
-                        {order.order_items.map(i => i.product?.name).join(", ")}
-                      </p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                        {order.order_items.length} {order.order_items.length === 1 ? 'Item' : 'Items'}
-                      </p>
-                    </div>
-                    {order.order_items.length > 3 && (
-                      <div className="w-8 h-8 rounded-full bg-white border border-gray-100 flex items-center justify-center shadow-sm">
-                        <span className="text-[10px] font-black text-gray-400">+{order.order_items.length - 3}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center">
+                        <span className="text-sm">📦</span>
                       </div>
-                    )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-700">
+                          {order.order_items.length} {order.order_items.length === 1 ? 'Item' : 'Items'}
+                        </p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          Total: ₱{order.order_items.reduce((sum, item) => sum + (item.price * item.quantity), 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   {/* DELIVERY INFO */}
@@ -252,7 +240,7 @@ export default function OrdersPage() {
                       </span>
                     </div>
                     
-                    {order.rider && order.status !== 'PENDING' && (
+                    {order.rider && order.status !== 'pending' && (
                       <div className="flex items-center gap-2">
                         <div className="text-right hidden sm:block">
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rider</p>

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useCartStore } from "@/store/cartStore";
 import AccountCompletionModal from "@/components/AccountCompletionModal";
-import LocationPicker from "@/components/LocationPicker";
+import AddressSelector from "@/components/AddressSelector";
+import AddressMapPin from "@/components/AddressMapPin";
 
 type Profile = {
   id: string;
@@ -126,8 +127,8 @@ export default function CheckoutPage() {
 
       clearCart();
       alert("Order placed successfully");
-      // You might want to redirect to order confirmation page
-      // window.location.href = '/user/orders';
+      // Redirect to orders page to see the new order
+      window.location.href = '/user/orders';
     } catch (error) {
       console.error('Error placing order:', error);
       alert('Failed to place order. Please try again.');
@@ -166,15 +167,20 @@ export default function CheckoutPage() {
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
             <span>📍</span> Delivery Location
           </h2>
-          <LocationPicker setLocation={setLocation} />
+          <AddressSelector onLocationSelect={setLocation} />
           {location && (
-            <div className="mt-4 p-3 bg-gray-50 rounded-2xl border border-gray-100">
-              <p className="text-sm font-bold text-gray-900">{location.address}</p>
-              {location.landmark && (
-                <p className="text-xs text-orange-600 font-medium mt-1">📍 {location.landmark}</p>
-              )}
-              <p className="text-[10px] text-gray-400 font-medium uppercase mt-1">Pinned automatically via GPS</p>
-            </div>
+            <>
+              <div className="mt-4">
+                <AddressMapPin location={location} />
+              </div>
+              <div className="mt-4 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                <p className="text-sm font-bold text-gray-900">{location.address}</p>
+                {location.landmark && (
+                  <p className="text-xs text-orange-600 font-medium mt-1">📍 {location.landmark}</p>
+                )}
+                <p className="text-[10px] text-gray-400 font-medium uppercase mt-1">Pinned automatically via GPS</p>
+              </div>
+            </>
           )}
         </section>
 

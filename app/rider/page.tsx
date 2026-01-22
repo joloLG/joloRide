@@ -60,11 +60,8 @@ export default function RiderPage() {
           ),
           order_items (
             id,
-            product:products (
-              name,
-              price
-            ),
-            quantity
+            quantity,
+            price
           )
         `)
         .eq("status", "pending")
@@ -86,11 +83,8 @@ export default function RiderPage() {
           ),
           order_items (
             id,
-            product:products (
-              name,
-              price
-            ),
-            quantity
+            quantity,
+            price
           )
         `)
         .eq("rider_id", profile.id)
@@ -137,28 +131,47 @@ export default function RiderPage() {
   const handleOrderAction = async (orderId: string, action: "confirm" | "pass" | "cancel" | "update_status", nextStatus?: string) => {
     try {
       const riderId = profile?.id;
-      if (!riderId) return;
+      console.log("🔧 Debug - Profile:", profile);
+      console.log("🔧 Debug - Rider ID:", riderId);
+      console.log("🔧 Debug - Order ID:", orderId);
+      console.log("🔧 Debug - Action:", action);
+      
+      if (!riderId) {
+        console.error("❌ No rider ID found in profile");
+        return;
+      }
 
       if (action === "confirm") {
+        console.log("🔧 Debug - Confirming order...");
         // Assign order to current rider
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("orders")
           .update({
             rider_id: riderId,
             status: "confirmed",
             confirmed_at: new Date().toISOString(),
           })
-          .eq("id", orderId);
+          .eq("id", orderId)
+          .select();
 
-        if (error) throw error;
+        console.log("🔧 Debug - Update result:", { data, error });
+
+        if (error) {
+          console.error("❌ Order update failed:", error);
+          throw error;
+        }
+
+        console.log("✅ Order confirmed successfully");
 
         // Move rider to end of queue (if DB trigger exists, it will handle rider_queue)
-        await supabase
+        const profileUpdate = await supabase
           .from("profiles")
           .update({
             last_order_at: new Date().toISOString(),
           })
           .eq("id", riderId);
+
+        console.log("🔧 Debug - Profile update result:", profileUpdate);
       } else if (action === "update_status" && nextStatus) {
         const { error } = await supabase
           .from("orders")
@@ -245,11 +258,15 @@ export default function RiderPage() {
                   <div className="space-y-2 bg-orange-50/50 rounded-xl p-3 border border-orange-100">
                     <div className="flex items-center gap-2 text-sm text-gray-700">
                       <span className="text-gray-400">👤</span>
-                      <p className="font-semibold">{order.user.full_name}</p>
+                      <p className="font-semibold">
+                        {order.user?.full_name || 'Unknown Customer'}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <span className="text-gray-400">📍</span>
-                      <p className="truncate">{order.user.address}</p>
+                      <p className="truncate">
+                        {order.user?.address || 'Address not available'}
+                      </p>
                     </div>
                   </div>
 
@@ -327,15 +344,19 @@ export default function RiderPage() {
                   <div className="space-y-2 bg-gray-50 rounded-xl p-3">
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-400">👤</span>
-                      <p className="text-gray-700 font-semibold">{order.user.full_name}</p>
+                      <p className="text-gray-700 font-semibold">
+                        {order.user?.full_name || 'Unknown User'}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-400">📍</span>
-                      <p className="text-gray-600 truncate">{order.user.address}</p>
+                      <p className="text-gray-600 truncate">
+                        {order.user?.address || 'Address not available'}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-400">📱</span>
-                      <p className="text-gray-600">{order.user.mobile}</p>
+                      <p className="text-gray-600">{order.user?.mobile || 'No phone'}</p>
                     </div>
                   </div>
 

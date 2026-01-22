@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import OSMMap from "@/components/OSMMap";
+import { useRiderLocationTracking } from "@/hooks/useLocationTracking";
+import { useUser } from "@/hooks/useUser";
+import { supabase } from "@/lib/supabase";
 
 interface Order {
   id: string;
@@ -12,9 +16,9 @@ interface Order {
   dropoff_lat?: number;
   dropoff_lng?: number;
   user: {
-    full_name: string;
-    mobile: string;
-    address: string;
+    full_name?: string;
+    mobile?: string;
+    address?: string;
   };
   order_items: {
     id: string;
@@ -24,6 +28,16 @@ interface Order {
     };
     quantity: number;
   }[];
+}
+
+interface RiderProfile {
+  id: string;
+  user_id: string;
+  email: string;
+  role: string;
+  full_name?: string;
+  mobile?: string;
+  is_active?: boolean;
 }
 
 interface OrderDetailsModalProps {
@@ -44,6 +58,73 @@ export default function OrderDetailsModal({
   onUpdateStatus,
 }: OrderDetailsModalProps) {
   const [showRoute, setShowRoute] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
+  
+  // Get the current user profile to get the rider ID
+  const { user: authUser } = useUser();
+  const [riderProfile, setRiderProfile] = useState<RiderProfile | null>(null);
+  
+  // Check location permission when order is confirmed
+  useEffect(() => {
+    if (order.status !== 'pending') {
+      const checkLocationPermission = async () => {
+        if ('geolocation' in navigator) {
+          try {
+            const permission = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+            setLocationPermission(permission.state as 'granted' | 'denied' | 'prompt');
+            
+            if (permission.state === 'prompt') {
+              // Request permission
+              navigator.geolocation.getCurrentPosition(
+                () => setLocationPermission('granted'),
+                () => setLocationPermission('denied'),
+                { enableHighAccuracy: true }
+              );
+            }
+          } catch (error) {
+            console.error('Error checking location permission:', error);
+            // Fallback: try to get location directly
+            navigator.geolocation.getCurrentPosition(
+              () => setLocationPermission('granted'),
+              () => setLocationPermission('denied'),
+              { enableHighAccuracy: true }
+            );
+          }
+        } else {
+          setLocationPermission('denied');
+        }
+      };
+
+      checkLocationPermission();
+    }
+  }, [order.status]);
+  
+  // Fetch rider profile to get the actual rider ID
+  useEffect(() => {
+    const fetchRiderProfile = async () => {
+      if (!authUser?.id) return;
+      
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", authUser.id)
+          .single();
+        
+        setRiderProfile(data);
+      } catch (error) {
+        console.error("Error fetching rider profile:", error);
+      }
+    };
+    
+    fetchRiderProfile();
+  }, [authUser]);
+  
+  // Start location tracking when order is confirmed and we have the rider ID
+  const locationTracking = useRiderLocationTracking(
+    order.status !== 'pending' && locationPermission === 'granted' ? riderProfile?.id : undefined,
+    order.id
+  );
 
   const getNextStatus = (currentStatus: string) => {
     switch (currentStatus) {
@@ -73,7 +154,7 @@ export default function OrderDetailsModal({
     const destination =
       order.dropoff_lat != null && order.dropoff_lng != null
         ? `${order.dropoff_lat},${order.dropoff_lng}`
-        : encodeURIComponent(order.dropoff_address || order.user.address);
+        : encodeURIComponent(order.dropoff_address || order.user?.address || 'Unknown Address');
 
     const url =
       order.dropoff_lat != null && order.dropoff_lng != null
@@ -97,21 +178,51 @@ export default function OrderDetailsModal({
         </div>
 
         <div className="p-4 overflow-y-auto">
+          {/* Location Permission Alert */}
+          {order.status !== 'pending' && locationPermission === 'denied' && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+              <h4 className="font-semibold text-red-900 mb-2 flex items-center gap-2 text-sm">
+                <span>📍</span> Location Access Required
+              </h4>
+              <p className="text-red-800 text-xs mb-3">
+                Location access is required for live tracking and accurate delivery updates. Please enable location permissions to provide the best service to customers.
+              </p>
+              <button
+                onClick={() => {
+                  navigator.geolocation.getCurrentPosition(
+                    () => setLocationPermission('granted'),
+                    () => setLocationPermission('denied'),
+                    { enableHighAccuracy: true }
+                  );
+                }}
+                className="bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-red-700"
+              >
+                Enable Location
+              </button>
+            </div>
+          )}
+
           {/* Customer Information */}
           <div className="bg-gray-50 rounded-xl p-4 mb-4">
             <h4 className="font-semibold text-gray-900 mb-3 text-sm uppercase tracking-wider">Customer</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-gray-500 uppercase">Name</p>
-                <p className="font-medium text-gray-900">{order.user.full_name}</p>
+                <p className="font-medium text-gray-900">
+                  {order.user?.full_name || 'Unknown Customer'}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500 uppercase">Mobile</p>
-                <p className="font-medium text-gray-900">{order.user.mobile}</p>
+                <p className="font-medium text-gray-900">
+                  {order.user?.mobile || 'No phone number'}
+                </p>
               </div>
               <div className="sm:col-span-2">
                 <p className="text-xs text-gray-500 uppercase">Address</p>
-                <p className="font-medium text-gray-900">{order.user.address}</p>
+                <p className="font-medium text-gray-900">
+                  {order.user?.address || 'Address not available'}
+                </p>
                 <button
                   onClick={handleGetRoute}
                   className="mt-3 w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
@@ -162,6 +273,27 @@ export default function OrderDetailsModal({
             </div>
           </div>
 
+          {/* Live Tracking Map - Show when order is confirmed */}
+          {order.status !== 'pending' && order.dropoff_lat && order.dropoff_lng && (
+            <div className="bg-gray-50 rounded-xl p-4 mb-4">
+              <h4 className="font-semibold text-gray-900 mb-3 text-sm uppercase tracking-wider flex items-center gap-2">
+                <span>🗺️</span> Live Delivery Tracking
+              </h4>
+              <div className="h-64 rounded-lg overflow-hidden">
+                <OSMMap
+                  riderLocation={locationTracking.location || undefined}
+                  destinationLocation={{
+                    lat: order.dropoff_lat,
+                    lng: order.dropoff_lng,
+                    address: order.dropoff_address || order.user?.address || 'Delivery Location',
+                  }}
+                  isRider={true}
+                  orderStatus={order.status}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Route Information */}
           {showRoute && (
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4">
@@ -169,7 +301,7 @@ export default function OrderDetailsModal({
                 <span>🗺️</span> Route Info
               </h4>
               <p className="text-blue-800 text-xs">
-                <strong>Destination:</strong> {order.user.address}
+                <strong>Destination:</strong> {order.user?.address || 'Address not available'}
               </p>
             </div>
           )}

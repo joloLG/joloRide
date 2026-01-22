@@ -84,7 +84,7 @@ export default function DeleteAccountPage() {
           {/* WARNING CARD */}
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="text-red-600 mt-1 flex-shrink-0" size={24} />
+              <AlertTriangle className="text-red-600 mt-1 shrink-0" size={24} />
               <div>
                 <h2 className="text-lg font-semibold text-red-900 mb-2">
                   This action cannot be undone
@@ -107,7 +107,7 @@ export default function DeleteAccountPage() {
             <h3 className="font-semibold text-gray-900 mb-3">Before you go...</h3>
             <div className="space-y-3">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
                   <span className="text-blue-600 font-semibold text-sm">1</span>
                 </div>
                 <div>
@@ -119,7 +119,7 @@ export default function DeleteAccountPage() {
               </div>
               
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
                   <span className="text-blue-600 font-semibold text-sm">2</span>
                 </div>
                 <div>
@@ -131,7 +131,7 @@ export default function DeleteAccountPage() {
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
                   <span className="text-blue-600 font-semibold text-sm">3</span>
                 </div>
                 <div>
